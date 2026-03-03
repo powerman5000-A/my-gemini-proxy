@@ -4,18 +4,18 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 1. 强制纠正路径，确保指向 OpenAI 兼容接口
+  // 1. 强制路由到 OpenAI 兼容接口
   const url = new URL(req.url, `https://${req.headers.host}`);
   let targetPath = '/v1beta/openai/chat/completions';
   if (url.pathname.includes('models')) targetPath = '/v1beta/openai/models';
 
-  // 2. 挖掘 API Key
+  // 2. 提取玩家填写的 Key
   const authHeader = req.headers['authorization'] || '';
   const urlKey = url.searchParams.get('key');
   const apiKey = (authHeader.replace('Bearer ', '').trim() || urlKey || '').trim();
 
   if (!apiKey) {
-    return res.status(401).json({ error: "Missing API Key", message: "请在 Authorization 或 URL 参数中提供 Key" });
+    return res.status(401).json({ error: "Missing API Key", message: "Key 丢失" });
   }
 
   const targetUrl = `https://generativelanguage.googleapis.com${targetPath}`;
@@ -25,12 +25,13 @@ export default async function handler(req, res) {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
+        // ✨ 核心修复：OpenAI 兼容接口必须强制拼装 Bearer 头！
+        'Authorization': `Bearer ${apiKey}`,
       }
     };
 
+    // 3. 处理 90,000 字符的大体积请求
     if (req.method === 'POST') {
-      // 针对 90,000 字符的流式读取
       const chunks = [];
       for await (const chunk of req) { chunks.push(chunk); }
       fetchOptions.body = Buffer.concat(chunks);
