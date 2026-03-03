@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Missing API Key" });
   }
 
-  // 2. 绝对锁死目标地址（不依赖任何拼接）
+  // 2. 绝对锁死目标地址
   const targetUrl = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
   try {
@@ -25,27 +25,15 @@ export default async function handler(req, res) {
       }
     };
 
+    // ✨ 核心修复：直接使用 Vercel 解析好的 req.body，不搞花里胡哨的数据流了
     if (req.method === 'POST') {
-      const chunks = [];
-      for await (const chunk of req) { chunks.push(chunk); }
-      fetchOptions.body = Buffer.concat(chunks);
+      fetchOptions.body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
     }
 
     const response = await fetch(targetUrl, fetchOptions);
     const data = await response.text();
 
-    // ⚡ 核心防伪雷达：如果 Google 报错，附加上我们的标记
-    if (!response.ok) {
-        let parsedError = data;
-        try { parsedError = JSON.parse(data); } catch(e){}
-        return res.status(response.status).json({
-            _proxy_status: "Vercel代码已是最新版_V5",
-            _target_url: targetUrl,
-            google_error: parsedError
-        });
-    }
-
-    res.status(200).send(data);
+    res.status(response.status).send(data);
   } catch (error) {
     res.status(500).json({ error: 'Proxy Error', detail: error.message });
   }
