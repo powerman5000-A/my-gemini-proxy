@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // 允许跨域
+  // 1. 允许跨域（这步很重要）
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -8,20 +8,22 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const targetUrl = `https://generativelanguage.googleapis.com${req.url}`;
+  // 2. 核心：修正路径
+  // 去掉 Vercel 自带的 /api/proxy 前缀，只保留 Google 需要的路径
+  const path = req.url.replace('/api/proxy', '');
+  const targetUrl = `https://generativelanguage.googleapis.com${path}`;
 
   try {
     const response = await fetch(targetUrl, {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        // 自动透传游戏发来的 Authorization (Bearer Key)
         'Authorization': req.headers['authorization'] || '',
       },
-      // 只有非 GET 请求才传输 Body
       body: req.method !== 'GET' ? JSON.stringify(req.body) : null,
     });
 
+    // 3. 针对 90,000 字符的流式传输简单处理
     const data = await response.json();
     res.status(response.status).json(data);
   } catch (error) {
